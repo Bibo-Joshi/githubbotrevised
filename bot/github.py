@@ -70,7 +70,7 @@ class GithubHandler:
 
                 try:
                     self.dispatcher.bot.send_message(chat_id=chat_id, text=message_text,
-                                                     parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+                                                     parse_mode=ParseMode.HTML, disable_web_page_preview=True, disable_notification=True)
                 except TelegramError:
                     logging.error('error while sending github update', exc_info=1)
 

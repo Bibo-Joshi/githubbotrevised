@@ -283,7 +283,7 @@ def add_repo_command(update, context):
     repo_id = decode_first_data_entity(update.effective_message.entities)
     if not repo_id:
         update.effective_message.reply_text(
-            'Please use /settings to add repositories, instead of using the command directly.')
+            'Please use /settings to add repositories, instead of using the command directly.', disable_notification=True)
         return
 
     repository = github_api.get_repository(repo_id, access_token=access_token)
