@@ -112,6 +112,23 @@ class GithubHandler:
 
             self._send(repo, text, lambda r: r.pull_comments if is_pull_request else r.issue_comments)
 
+    def discussion(self, update, _):
+        # Discussion created, edited, deleted, pinned, unpinned, locked, unlocked, transferred,
+        # category_changed, answered, unanswered, labeled, or unlabeled
+        if update.payload['action'] == 'created':
+            discussion = update.payload['discussion']
+            author = discussion['user']
+            repo = update.payload['repository']
+
+            text = render_github_markdown(discussion['body'], repo['full_name'])
+
+            issue_link = link(discussion['html_url'], f'{repo["full_name"]}#{discussion["number"]} {discussion["title"]}')
+            author_link = link(author['html_url'], '@' + author['login'])
+            data_link = encode_data_link(('discussion', repo['full_name'], discussion['number'], author['login']))
+            text = f'{data_link}⁉️ New discussion {issue_link}\nby {author_link}\n\n{text}'
+
+            self._send(repo, text, lambda r: r.issues)
+
     def pull_request(self, update, context):
         # Pull request opened, closed, reopened, edited, assigned, unassigned, review requested,
         # review request removed, labeled, unlabeled, or synchronized.
@@ -140,10 +157,10 @@ class GithubHandler:
             author = review['user']
             repo = update.payload['repository']
 
-            if not review['body']:
-                return
-
-            text = render_github_markdown(review['body'], repo['full_name'])
+            if review['body']:
+                text = "\n\n" + render_github_markdown(review['body'], repo['full_name'])
+            else:
+                text = ""
 
             review_link = link(review['html_url'],
                                f'{repo["full_name"]}#{pull_request["number"]} {pull_request["title"]}')
@@ -161,7 +178,7 @@ class GithubHandler:
                     state = 'Changes requested'
                     emoji = '‼️'
 
-                text = f'{data_link}{emoji} New pull request review {review_link}\n{state} by {author_link}\n\n{text}'
+                text = f'{data_link}{emoji} New pull request review {review_link}\n{state} by {author_link}{text}'
                 self._send(repo, text, lambda r: r.pull_reviews)
 
     def pull_request_review_comment(self, update, context):

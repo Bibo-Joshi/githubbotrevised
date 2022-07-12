@@ -124,6 +124,15 @@ def reply_handler(update: Update, context: CallbackContext):
         context.job_queue.run_once(delete_job, 30, sent_msg)
         return
 
+    if comment_type == 'discussion':
+        sent_msg = msg.reply_text(f'Cannot reply discussions.\n\n'
+                                  f'<i>This message will self destruct in 30 sec.</i>',
+                                  parse_mode=ParseMode.HTML,
+                                  disable_notification=True)
+        context.job_queue.run_once(delete_job, 30, sent_msg)
+        return
+
+
     if comment_type in ('issue', 'pull request'):
         repo, number, author = data
         text = f'@{author} {msg.text_html}'
