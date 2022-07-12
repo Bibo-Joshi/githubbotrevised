@@ -78,17 +78,28 @@ class GithubHandler:
         # Issue opened, edited, closed, reopened, assigned, unassigned, labeled,
         # unlabeled, milestoned, or demilestoned.
         # TODO: Possibly support editing, closing, reopening, etc. of issues
-        if update.payload['action'] == 'opened':
+        if update.payload['action'] in ('opened', 'closed', 'reopened'):
             issue = update.payload['issue']
             author = issue['user']
             repo = update.payload['repository']
 
-            text = render_github_markdown(issue['body'], repo['full_name'])
+            if update.payload['action'] == 'opened':
+                desc = '🐛 New issue'
+                if issue['body']:
+                    text = "\n\n" + render_github_markdown(issue['body'], repo['full_name'])
+                else:
+                    text = "\n\nNo description provided."
+            elif update.payload['action'] == 'closed':
+                desc = '✅ Issue closed'
+                text = ""
+            elif update.payload['action'] == 'reopened':
+                desc = '🔄 Issue reopened'
+                text = ""
 
             issue_link = link(issue['html_url'], f'{repo["full_name"]}#{issue["number"]} {issue["title"]}')
             author_link = link(author['html_url'], '@' + author['login'])
             data_link = encode_data_link(('issue', repo['full_name'], issue['number'], author['login']))
-            text = f'{data_link}🐛 New issue {issue_link}\nby {author_link}\n\n{text}'
+            text = f'{data_link}{desc} {issue_link}\nby {author_link}{text}'
 
             self._send(repo, text, lambda r: r.issues)
 
@@ -112,6 +123,23 @@ class GithubHandler:
 
             self._send(repo, text, lambda r: r.pull_comments if is_pull_request else r.issue_comments)
 
+    def discussion(self, update, _):
+        # Discussion created, edited, deleted, pinned, unpinned, locked, unlocked, transferred,
+        # category_changed, answered, unanswered, labeled, or unlabeled
+        if update.payload['action'] == 'created':
+            discussion = update.payload['discussion']
+            author = discussion['user']
+            repo = update.payload['repository']
+
+            text = render_github_markdown(discussion['body'], repo['full_name'])
+
+            issue_link = link(discussion['html_url'], f'{repo["full_name"]}#{discussion["number"]} {discussion["title"]}')
+            author_link = link(author['html_url'], '@' + author['login'])
+            data_link = encode_data_link(('discussion', repo['full_name'], discussion['number'], author['login']))
+            text = f'{data_link}⁉️ New discussion {issue_link}\nby {author_link}\n\n{text}'
+
+            self._send(repo, text, lambda r: r.issues, suffix="")
+
     def pull_request(self, update, context):
         # Pull request opened, closed, reopened, edited, assigned, unassigned, review requested,
         # review request removed, labeled, unlabeled, or synchronized.
@@ -121,7 +149,10 @@ class GithubHandler:
             author = pull_request['user']
             repo = update.payload['repository']
 
-            text = render_github_markdown(pull_request['body'], repo['full_name'])
+            if pull_request['body']:
+                text = render_github_markdown(pull_request['body'], repo['full_name'])
+            else:
+                text = "No description provided"
 
             pull_request_link = link(pull_request['html_url'],
                                      f'{repo["full_name"]}#{pull_request["number"]} {pull_request["title"]}')
@@ -140,28 +171,28 @@ class GithubHandler:
             author = review['user']
             repo = update.payload['repository']
 
-            if not review['body']:
-                return
-
-            text = render_github_markdown(review['body'], repo['full_name'])
+            if review['body']:
+                text = "\n\n" + render_github_markdown(review['body'], repo['full_name'])
+            else:
+                text = ""
 
             review_link = link(review['html_url'],
                                f'{repo["full_name"]}#{pull_request["number"]} {pull_request["title"]}')
             author_link = link(author['html_url'], '@' + author['login'])
             data_link = encode_data_link(('pull request', repo['full_name'], pull_request['number'], author['login']))
 
-            if review['state'] in ('commented', 'approved', 'request_changes'):
+            if review['state'] in ('commented', 'approved', 'request_changes', 'changes_requested'):
                 if review['state'] == 'commented':
                     state = 'Commented'
                     emoji = '💬'
                 elif review['state'] == 'approved':
                     state = 'Approved'
                     emoji = '✅'
-                elif review['state'] == 'request_changes':
+                elif review['state'] in ('request_changes', 'changes_requested'):
                     state = 'Changes requested'
                     emoji = '‼️'
 
-                text = f'{data_link}{emoji} New pull request review {review_link}\n{state} by {author_link}\n\n{text}'
+                text = f'{data_link}{emoji} New pull request review {review_link}\n{state} by {author_link}{text}'
                 self._send(repo, text, lambda r: r.pull_reviews)
 
     def pull_request_review_comment(self, update, context):
