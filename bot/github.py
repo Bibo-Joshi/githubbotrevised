@@ -171,10 +171,24 @@ class GithubHandler:
             author = review['user']
             repo = update.payload['repository']
 
+            # Warning: Currently only works for public repos. Otherwise, we need an access token
+            # to access the comments.
+            comments = github_api.get_pull_request_review_comments(
+                repo['owner']['login'],
+                repo['name'],
+                pull_request['number'],
+                review['id'],
+            )
+            all_replies = all(comment.get("in_reply_to_id") for comment in comments)
+
             if review['body']:
                 text = "\n\n" + render_github_markdown(review['body'], repo['full_name'])
             else:
                 text = ""
+
+            if not text and all_replies:
+                # Don't ping when review only contains replies
+                return
 
             review_link = link(review['html_url'],
                                f'{repo["full_name"]}#{pull_request["number"]} {pull_request["title"]}')
@@ -200,9 +214,6 @@ class GithubHandler:
         if update.payload['action'] == 'created':
             pull_request = update.payload['pull_request']
             comment = update.payload['comment']
-            if comment.get('in_reply_to_id'):
-                # Don't handle comments that are replies to other comments
-                return
 
             author = comment['user']
             repo = update.payload['repository']

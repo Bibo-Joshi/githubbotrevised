@@ -81,11 +81,22 @@ class GithubAPI:
     def get_paginated(self, key, url, *args, **kwargs):
         r = self.get(url, *args, **kwargs)
         r.raise_for_status()
-        data = r.json()[key]
+
+        json_data = r.json()
+        if isinstance(json_data, list):
+            data = json_data
+        else:
+            data = json_data[key]
+
         while 'link' in r.links.keys():
             r = self.get(url, headers=r.request.headers)
             r.raise_for_status()
-            data.extend(r.json()[key])
+
+            json_data = r.json()
+            if isinstance(json_data, list):
+                data.extend(json_data)
+            else:
+                data.extend(json_data[key])
         return data
 
     def oauth_authorize_url(self, *args):
@@ -140,6 +151,14 @@ class GithubAPI:
         r.raise_for_status()
 
         return r.json()
+
+    def get_pull_request_review_comments(self, owner, repo, pull_number, review_id, *args, **kwargs):
+        return self.get_paginated(
+            'comments',
+            f'https://api.github.com/repos/{owner}/{repo}/pulls/{pull_number}/reviews/{review_id}/comments',
+            *args,
+            **kwargs
+        )
 
     def markdown(self, markdown, context):
         r = self.post(f'https://api.github.com/markdown', json={
