@@ -200,6 +200,10 @@ class GithubHandler:
         if update.payload['action'] == 'created':
             pull_request = update.payload['pull_request']
             comment = update.payload['comment']
+            if comment.get('in_reply_to_id'):
+                # Don't handle comments that are replies to other comments
+                return
+
             author = comment['user']
             repo = update.payload['repository']
 
