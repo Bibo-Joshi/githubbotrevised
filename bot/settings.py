@@ -1,6 +1,7 @@
 from itertools import zip_longest
 from uuid import uuid4
 
+from requests import HTTPError
 from telegram import Chat, InlineQueryResultArticle, InputTextMessageContent, ParseMode
 from telegram.ext import Dispatcher, InlineQueryHandler, CommandHandler
 
@@ -32,11 +33,19 @@ def settings_text(update, context):
         access_token = context.user_data.get('access_token')
 
         if access_token:
-            github_user = github_api.get_user(access_token)
+            try:
+                github_user = github_api.get_user(access_token)
 
-            text += ('🔓 You are currently logged in as '
-                     f'<a href="{github_user["html_url"]}">{github_user["login"]} ({github_user["name"]})</a>'
-                     '.\n')
+                text += ('🔓 You are currently logged in as '
+                         f'<a href="{github_user["html_url"]}">{github_user["login"]} ({github_user["name"]})</a>'
+                         '.\n')
+            except HTTPError as exc:
+                if "Unauthorized for url" not in str(exc):
+                    raise exc
+
+                context.user_data.pop('access_token', None)
+                text += f'🔒 You are currently not logged in.\n'
+
         else:
             text += f'🔒 You are currently not logged in.\n'
 
@@ -82,11 +91,21 @@ def login_text(update, context):
     access_token = context.user_data.get('access_token')
 
     if access_token:
-        github_user = github_api.get_user(access_token)
+        try:
+            github_user = github_api.get_user(access_token)
 
-        return ('Successfully logged in as '
-                f'<a href="{github_user["html_url"]}">{github_user["login"]} ({github_user["name"]})</a>'
-                '.\n')
+            return ('Successfully logged in as '
+                    f'<a href="{github_user["html_url"]}">{github_user["login"]} ({github_user["name"]})</a>'
+                    '.\n')
+        except HTTPError as exc:
+            if "Unauthorized for url" not in str(exc):
+                raise exc
+
+            context.user_data.pop('access_token', None)
+            oauth_link = github_api.oauth_authorize_url(update.effective_user.id,
+                                                        update.effective_message.message_id)
+
+            return f'Please click this link to login using GitHub: {oauth_link}'
     else:
         oauth_link = github_api.oauth_authorize_url(update.effective_user.id,
                                                     update.effective_message.message_id)

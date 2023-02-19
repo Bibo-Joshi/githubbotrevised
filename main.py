@@ -1,6 +1,7 @@
 import http.client
 import logging
 
+from requests import HTTPError
 from telegram import Update, ParseMode, InlineKeyboardMarkup, InlineKeyboardButton, Chat
 from telegram.ext import TypeHandler, CallbackContext, CommandHandler, MessageHandler, Filters
 
@@ -132,17 +133,32 @@ def reply_handler(update: Update, context: CallbackContext):
         context.job_queue.run_once(delete_job, 30, sent_msg)
         return
 
+    try:
+        if comment_type in ('issue', 'pull request'):
+            repo, number, author = data
+            text = f'@{author} {msg.text_html}'
 
-    if comment_type in ('issue', 'pull request'):
-        repo, number, author = data
-        text = f'@{author} {msg.text_html}'
+            github_api.add_issue_comment(repo, number, text, access_token=access_token)
+        elif comment_type == 'pull request review comment':
+            repo, number, comment_id, author = data
+            text = f'@{author} {msg.text_html}'
 
-        github_api.add_issue_comment(repo, number, text, access_token=access_token)
-    elif comment_type == 'pull request review comment':
-        repo, number, comment_id, author = data
-        text = f'@{author} {msg.text_html}'
+            github_api.add_review_comment(repo, number, comment_id, text, access_token=access_token)
+    except HTTPError as exc:
+        if "Unauthorized for url" not in str(exc):
+            raise exc
 
-        github_api.add_review_comment(repo, number, comment_id, text, access_token=access_token)
+        context.user_data.pop('access_token', None)
+        msg.reply_text(
+            f'Cannot reply to {comment_type}, since your login token is no longer valid. '
+            f'Press button below to go to a private chat with me and login again.\n\n'
+            f'<i>This message will self destruct in 30 sec.</i>',
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton('Login', url=deep_link(context.bot, 'login'))
+            ]]),
+            parse_mode=ParseMode.HTML,
+            disable_notification=True
+        )
 
 
 if __name__ == '__main__':
